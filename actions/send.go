@@ -1,15 +1,34 @@
 package actions
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	tgutil "polina_petrilovna/utils"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
+
+type RequestData struct {
+	Messages []Message    `json:"messages"`
+	Stream   bool         `json:"stream"`
+	Model    modelOptions `json:"model"`
+}
+
+type ResponseData struct {
+	Choices []struct {
+		Index   int `json:"index"`
+		Message struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"message"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+}
 
 var MentionKeywords = []string{
 	"PolinaPetrilovnaBot",
@@ -19,6 +38,7 @@ var MentionKeywords = []string{
 	"бабка",
 	"карга",
 	"бабуля",
+	"бабуль",
 	"бабушка",
 	"баба",
 	"полина",
@@ -54,7 +74,7 @@ func ShouldAnswer(update tgbotapi.Update) bool {
 
 // EmulateTyping Отправляет эмуляцию печати в беседу
 // в звисимости от длины сообщения и длины запроса
-func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64, textLength int, alreadyPassed time.Duration) {
+func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64, textLength int) {
 	chatActionConfig := tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)
 	_, _ = bot.Send(chatActionConfig)
 
@@ -62,7 +82,6 @@ func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64, textLength int, alreadyPa
 	speedAdjustment := .7
 
 	nominalDuration := (float64(textLength) / cps * 60 * 1000) * speedAdjustment
-	nominalDuration -= float64(alreadyPassed.Milliseconds())
 
 	randomAdjustment := rand.Float64() * .3
 	adjustedDuration := nominalDuration * (1 - randomAdjustment)
@@ -71,21 +90,36 @@ func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64, textLength int, alreadyPa
 	durationInTimeFormat := time.Duration(durationInMilliseconds) * time.Millisecond
 
 	fmt.Printf("[%s] [EMUL] Typing Message %+v...\n", tgutil.GetFormattedTime(), durationInTimeFormat)
-
-	time.Sleep(durationInTimeFormat)
-
-	fmt.Printf("[%s] [EMUL] Message sent\n\n", tgutil.GetFormattedTime())
 }
 
-func GenerateAndSendMessage(bot *tgbotapi.BotAPI, user *tgbotapi.User, messageText string, chatID int64, messageID int) {
-	fmt.Printf("[%s] Working with Message: %+v %+v %+v\n", tgutil.GetFormattedTime(), chatID, messageID, messageText)
+func GenerateAndSendMessage(bot *tgbotapi.BotAPI, messageText string, chatID int64, messageID int) {
+	fmt.Printf("[%s] [%+v // %+v] Working with Message: %+v\n", tgutil.GetFormattedTime(), chatID, messageID, messageText)
 
-	EmulateTyping(bot, chatID, len("Привет, внучек %s (@%s)!"), 1*time.Second)
+	// Emulate
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
 
-	userTeleTag := user.UserName
-	firstName := user.FirstName
+	// Call EmulateTyping in parallel until GenerateNeuralMessage ends
+	go func() {
+		defer wg.Done()
 
-	message := fmt.Sprintf("Привет, внучек %s (@%s)! Ответ на сообщение: %s", firstName, userTeleTag, messageText)
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				EmulateTyping(bot, chatID, len(messageText))
+			}
+		}
+	}()
+
+	// Generate
+	message, _ := GenerateNeuralMessage(messageText)
+	cancel()
 
 	if len(GroupMessages[chatID]) <= 2 {
 		msg := tgbotapi.NewMessage(chatID, message)
@@ -96,5 +130,6 @@ func GenerateAndSendMessage(bot *tgbotapi.BotAPI, user *tgbotapi.User, messageTe
 		_, _ = bot.Send(replyMsg)
 	}
 
+	fmt.Printf("[%s] Message sent\n\n", tgutil.GetFormattedTime())
 	fmt.Printf("[%s] [Group Capacity] %d\n", tgutil.GetFormattedTime(), len(GroupMessages[chatID]))
 }

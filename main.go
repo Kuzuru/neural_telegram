@@ -15,9 +15,9 @@ import (
 	"github.com/pkoukk/tiktoken-go"
 )
 
-func processGroupMessages(bot *tgbotapi.BotAPI, user *tgbotapi.User, chatID int64) {
+func processGroupMessages(bot *tgbotapi.BotAPI, chatID int64) {
 	for msg := range actions.GroupMessages[chatID] {
-		actions.GenerateAndSendMessage(bot, fmt.Sprintf("%s (%s): %s", user.FirstName, user.UserName, msg.Message), chatID, msg.MessageID)
+		actions.GenerateAndSendMessage(bot, msg.Message, chatID, msg.MessageID)
 	}
 }
 
@@ -91,8 +91,6 @@ func main() {
 				chatID := update.Message.Chat.ID
 
 				if actions.GroupMessages[chatID] == nil {
-					fmt.Printf("[%s] [MSG] %s: %s\n", tgutil.GetFormattedTime(), update.Message.From.UserName, update.Message.Text)
-
 					actions.GroupMessages[chatID] = make(chan actions.GroupMessage)
 
 					// [[[ WRITING INITIAL DATA ]]]
@@ -110,13 +108,13 @@ func main() {
 					actions.AllMessageData.Unlock()
 					// [[[ EOW ]]]
 
-					go processGroupMessages(bot, update.Message.From, chatID)
+					go processGroupMessages(bot, chatID)
 				}
 
 				if actions.ShouldAnswer(update) {
 					actions.GroupMessages[chatID] <- actions.GroupMessage{
 						UserID:    update.Message.From.ID,
-						Message:   update.Message.Text,
+						Message:   fmt.Sprintf("%s (%s): %s", update.Message.From.FirstName, update.Message.From.UserName, update.Message.Text),
 						MessageID: update.Message.MessageID,
 					}
 				}

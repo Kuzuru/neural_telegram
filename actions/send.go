@@ -73,23 +73,9 @@ func ShouldAnswer(update tgbotapi.Update) bool {
 }
 
 // EmulateTyping Отправляет эмуляцию печати в беседу
-// в звисимости от длины сообщения и длины запроса
-func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64, textLength int) {
+func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64) {
 	chatActionConfig := tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)
 	_, _ = bot.Send(chatActionConfig)
-
-	cps := 230.0
-	speedAdjustment := .7
-
-	nominalDuration := (float64(textLength) / cps * 60 * 1000) * speedAdjustment
-
-	randomAdjustment := rand.Float64() * .3
-	adjustedDuration := nominalDuration * (1 - randomAdjustment)
-
-	durationInMilliseconds := int(adjustedDuration)
-	durationInTimeFormat := time.Duration(durationInMilliseconds) * time.Millisecond
-
-	fmt.Printf("[%s] [EMUL] Typing Message %+v...\n", tgutil.GetFormattedTime(), durationInTimeFormat)
 }
 
 func GenerateAndSendMessage(bot *tgbotapi.BotAPI, messageText string, chatID int64, messageID int) {
@@ -112,7 +98,7 @@ func GenerateAndSendMessage(bot *tgbotapi.BotAPI, messageText string, chatID int
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				EmulateTyping(bot, chatID, len(messageText))
+				EmulateTyping(bot, chatID)
 			}
 		}
 	}()

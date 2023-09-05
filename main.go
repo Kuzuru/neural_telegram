@@ -91,7 +91,7 @@ func main() {
 				chatID := update.Message.Chat.ID
 
 				if actions.GroupMessages[chatID] == nil {
-					actions.GroupMessages[chatID] = make(chan actions.GroupMessage)
+					actions.GroupMessages[chatID] = make(chan actions.GroupMessage, 3)
 
 					// [[[ WRITING INITIAL DATA ]]]
 					requestData, err := ReadPromptsJSON("prompts.json")

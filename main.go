@@ -114,7 +114,7 @@ func main() {
 				if actions.ShouldAnswer(update) {
 					actions.GroupMessages[chatID] <- actions.GroupMessage{
 						UserID:    update.Message.From.ID,
-						Message:   fmt.Sprintf("%s (%s): %s", update.Message.From.FirstName, update.Message.From.UserName, update.Message.Text),
+						Message:   fmt.Sprintf("%s (@%s): %s", update.Message.From.FirstName, update.Message.From.UserName, update.Message.Text),
 						MessageID: update.Message.MessageID,
 					}
 				}

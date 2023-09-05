@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -15,8 +17,36 @@ import (
 
 func processGroupMessages(bot *tgbotapi.BotAPI, user *tgbotapi.User, chatID int64) {
 	for msg := range actions.GroupMessages[chatID] {
-		actions.GenerateAndSendMessage(bot, user, msg.Message, chatID, msg.MessageID)
+		actions.GenerateAndSendMessage(bot, fmt.Sprintf("%s (%s): %s", user.FirstName, user.UserName, msg.Message), chatID, msg.MessageID)
 	}
+}
+
+func ReadPromptsJSON(filename string) (*actions.RequestData, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("error opening file: %v", err)
+	}
+
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}(file)
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("error reading file: %v", err)
+	}
+
+	var requestData actions.RequestData
+
+	err = json.Unmarshal(data, &requestData)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling JSON: %v", err)
+	}
+
+	return &requestData, nil
 }
 
 func bootstrap() (*tgbotapi.BotAPI, tgbotapi.UpdateConfig, error) {
@@ -64,6 +94,22 @@ func main() {
 					fmt.Printf("[%s] [MSG] %s: %s\n", tgutil.GetFormattedTime(), update.Message.From.UserName, update.Message.Text)
 
 					actions.GroupMessages[chatID] = make(chan actions.GroupMessage)
+
+					// [[[ WRITING INITIAL DATA ]]]
+					requestData, err := ReadPromptsJSON("prompts.json")
+					if err != nil {
+						fmt.Printf("Error: %v\n", err)
+					}
+
+					actions.AllMessageData.Lock()
+
+					for _, message := range requestData.Messages {
+						actions.AllMessageData.Messages = append(actions.AllMessageData.Messages, message)
+					}
+
+					actions.AllMessageData.Unlock()
+					// [[[ EOW ]]]
+
 					go processGroupMessages(bot, update.Message.From, chatID)
 				}
 

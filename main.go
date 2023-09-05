@@ -4,22 +4,34 @@ import (
 	"fmt"
 	"log"
 	"os"
+
 	"polina_petrilovna/actions"
 	tgutil "polina_petrilovna/utils"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/pkoukk/tiktoken-go"
 )
 
 func processGroupMessages(bot *tgbotapi.BotAPI, user *tgbotapi.User, chatID int64) {
 	for msg := range actions.GroupMessages[chatID] {
-		actions.Greeting(bot, user, msg.Message, chatID, msg.MessageID)
+		actions.GenerateAndSendMessage(bot, user, msg.Message, chatID, msg.MessageID)
 	}
 }
 
 func bootstrap() (*tgbotapi.BotAPI, tgbotapi.UpdateConfig, error) {
+	tke, err := tiktoken.GetEncoding("cl100k_base")
+	if err != nil {
+		return nil, tgbotapi.UpdateConfig{}, err
+	}
+
+	// Initialize TikToken
+	actions.TKE = tke
+
+	// Get .env
 	botToken := os.Getenv("BOT_TOKEN")
 
+	// Main bootstrap
 	bot, err := tgbotapi.NewBotAPI(botToken)
 	if err != nil {
 		return nil, tgbotapi.UpdateConfig{}, err

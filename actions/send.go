@@ -70,15 +70,15 @@ func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64, textLength int, alreadyPa
 	durationInMilliseconds := int(adjustedDuration)
 	durationInTimeFormat := time.Duration(durationInMilliseconds) * time.Millisecond
 
-	fmt.Printf("[%s] [EMUL] Typing message %+v...\n", tgutil.GetFormattedTime(), durationInTimeFormat)
+	fmt.Printf("[%s] [EMUL] Typing Message %+v...\n", tgutil.GetFormattedTime(), durationInTimeFormat)
 
 	time.Sleep(durationInTimeFormat)
 
 	fmt.Printf("[%s] [EMUL] Message sent\n\n", tgutil.GetFormattedTime())
 }
 
-func Greeting(bot *tgbotapi.BotAPI, user *tgbotapi.User, messageText string, chatID int64, messageID int) {
-	fmt.Printf("[%s] Working with message: %+v %+v %+v\n", tgutil.GetFormattedTime(), chatID, messageID, messageText)
+func GenerateAndSendMessage(bot *tgbotapi.BotAPI, user *tgbotapi.User, messageText string, chatID int64, messageID int) {
+	fmt.Printf("[%s] Working with Message: %+v %+v %+v\n", tgutil.GetFormattedTime(), chatID, messageID, messageText)
 
 	EmulateTyping(bot, chatID, len("Привет, внучек %s (@%s)!"), 1*time.Second)
 

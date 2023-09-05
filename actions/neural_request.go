@@ -1,18 +1,35 @@
 package actions
 
 import (
-	"github.com/pkoukk/tiktoken-go"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/pkoukk/tiktoken-go"
 )
 
 type modelOptions string
 
 const (
-	GPT4          modelOptions = "gpt-4"
-	GPT432k       modelOptions = "gpt-4-32k"
-	GPT35Turbo    modelOptions = "gpt-3.5-turbo"
-	GPT35Turbo16k modelOptions = "gpt-3.5-turbo-16k"
+	GPT4       modelOptions = "gpt-4"
+	GPT35Turbo modelOptions = "gpt-3.5-turbo"
 )
+
+type AllMessages struct {
+	*sync.Mutex
+	Messages []Message
+}
+
+var AllMessageData = &AllMessages{
+	Mutex:    &sync.Mutex{},
+	Messages: make([]Message, 0),
+}
 
 type Message struct {
 	Role    string
@@ -99,4 +116,89 @@ func LimitMessageTokens(messages []Message, limit int, model modelOptions) []Mes
 	}
 
 	return limitedMessages
+}
+
+func prepareAndTokenizeData() RequestData {
+	limitMessages := LimitMessageTokens(AllMessageData.Messages, 4096, GPT4)
+
+	newData := RequestData{
+		Messages: limitMessages,
+		Stream:   false,
+		Model:    GPT4,
+	}
+
+	return newData
+}
+
+func GenerateNeuralMessage(messageText string) (string, time.Duration) {
+	startTime := time.Now()
+
+	url := os.Getenv("NEURAL_NETWORK_URL") + "?conversation_id=" + os.Getenv("CONVERSATION_ID")
+	token := os.Getenv("AUTHORIZATION_TOKEN")
+
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	AllMessageData.Lock()
+	AllMessageData.Messages = append(AllMessageData.Messages, Message{
+		Role:    "user",
+		Content: messageText,
+	})
+
+	requestData := prepareAndTokenizeData()
+	AllMessageData.Unlock()
+
+	jsonData, err := json.Marshal(requestData)
+	if err != nil {
+		fmt.Printf("Error marshaling requestData: %v\n", err)
+		return "", time.Duration(0)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonData))
+	if err != nil {
+		fmt.Printf("Error creating request: %v\n", err)
+		return "", time.Duration(0)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", token)
+
+	res, err := client.Do(req)
+
+	if err != nil {
+		fmt.Printf("Error sending request: %v\n", err)
+		return "", time.Duration(0)
+	}
+
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Printf("[ERR] [net/http] %+v\n", err)
+		}
+	}(res.Body)
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %v\n", err)
+		return "", time.Duration(0)
+	}
+
+	responseData := &ResponseData{}
+
+	err = json.Unmarshal(body, responseData)
+	if err != nil {
+		fmt.Printf("[ERR] [unmarshal] %+v\n", err)
+	}
+
+	AllMessageData.Lock()
+	AllMessageData.Messages = append(AllMessageData.Messages, Message{
+		Role:    responseData.Choices[0].Message.Role,
+		Content: responseData.Choices[0].Message.Content,
+	})
+	AllMessageData.Unlock()
+
+	duration := time.Since(startTime)
+
+	return responseData.Choices[0].Message.Content, duration
 }

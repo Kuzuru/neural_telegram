@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -78,6 +79,13 @@ func EmulateTyping(bot *tgbotapi.BotAPI, chatID int64) {
 	_, _ = bot.Send(chatActionConfig)
 }
 
+func trimResponse(response string) string {
+	trimGptDan := regexp.MustCompile(`(?s)(GPT:.*?DAN:)|(DAN:.*?GPT:)`)
+	noGptAndDan := trimGptDan.ReplaceAllString(response, "")
+
+	return strings.TrimSpace(noGptAndDan)
+}
+
 func GenerateAndSendMessage(bot *tgbotapi.BotAPI, messageText string, chatID int64, messageID int) {
 	fmt.Printf("[%s] [%+v // %+v] Working with Message: %+v\n", tgutil.GetFormattedTime(), chatID, messageID, messageText)
 
@@ -107,7 +115,10 @@ func GenerateAndSendMessage(bot *tgbotapi.BotAPI, messageText string, chatID int
 	message, _ := GenerateNeuralMessage(messageText)
 	cancel()
 
-	if len(GroupMessages[chatID]) <= 2 {
+	// Grooming
+	message = trimResponse(message)
+
+	if len(GroupMessages[chatID]) < 2 {
 		msg := tgbotapi.NewMessage(chatID, message)
 		_, _ = bot.Send(msg)
 	} else {

@@ -128,7 +128,7 @@ func LimitMessageTokens(messages []Message, limit int, model modelOptions) []Mes
 }
 
 func prepareAndTokenizeData() RequestData {
-	limitMessages := LimitMessageTokens(AllMessageData.Messages, 4096, GPT4)
+	limitMessages := LimitMessageTokens(AllMessageData.Messages, 7000, GPT4)
 
 	newData := RequestData{
 		Messages: limitMessages,

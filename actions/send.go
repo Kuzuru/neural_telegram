@@ -83,7 +83,9 @@ func trimResponse(response string) string {
 	trimGptDan := regexp.MustCompile(`(?s)(GPT:.*?DAN:)|(DAN:.*?GPT:)`)
 	noGptAndDan := trimGptDan.ReplaceAllString(response, "")
 
-	return strings.TrimSpace(noGptAndDan)
+	noNewlinesString := strings.Replace(noGptAndDan, "\\n", "\n", -1)
+
+	return strings.TrimSpace(noNewlinesString)
 }
 
 func GenerateAndSendMessage(bot *tgbotapi.BotAPI, messageText string, chatID int64, messageID int) {

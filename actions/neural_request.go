@@ -36,6 +36,15 @@ type Message struct {
 	Content string
 }
 
+type ErrorMessage struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+}
+
+type ErrorDetail struct {
+	Error ErrorMessage `json:"error"`
+}
+
 var TKE *tiktoken.Tiktoken
 
 func getChatGPTEncoding(messages []Message, model modelOptions) []int {
@@ -130,7 +139,7 @@ func prepareAndTokenizeData() RequestData {
 	return newData
 }
 
-func GenerateNeuralMessage(messageText string) (string, time.Duration) {
+func GenerateNeuralMessage(messageText string) (string, time.Duration, bool) {
 	startTime := time.Now()
 
 	url := os.Getenv("NEURAL_NETWORK_URL") + "?conversation_id=" + os.Getenv("CONVERSATION_ID")
@@ -152,13 +161,13 @@ func GenerateNeuralMessage(messageText string) (string, time.Duration) {
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {
 		fmt.Printf("Error marshaling requestData: %v\n", err)
-		return "", time.Duration(0)
+		return "", time.Duration(0), false
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonData))
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
-		return "", time.Duration(0)
+		return "", time.Duration(0), false
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -168,7 +177,7 @@ func GenerateNeuralMessage(messageText string) (string, time.Duration) {
 
 	if err != nil {
 		fmt.Printf("Error sending request: %v\n", err)
-		return "", time.Duration(0)
+		return "", time.Duration(0), false
 	}
 
 	defer func(Body io.ReadCloser) {
@@ -181,7 +190,7 @@ func GenerateNeuralMessage(messageText string) (string, time.Duration) {
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		fmt.Printf("Error reading response body: %v\n", err)
-		return "", time.Duration(0)
+		return "", time.Duration(0), false
 	}
 
 	responseData := &ResponseData{}
@@ -191,14 +200,29 @@ func GenerateNeuralMessage(messageText string) (string, time.Duration) {
 		fmt.Printf("[ERR] [unmarshal] %+v\n", err)
 	}
 
-	AllMessageData.Lock()
-	AllMessageData.Messages = append(AllMessageData.Messages, Message{
-		Role:    responseData.Choices[0].Message.Role,
-		Content: responseData.Choices[0].Message.Content,
-	})
-	AllMessageData.Unlock()
+	if len(responseData.Choices) > 0 {
+		AllMessageData.Lock()
+		AllMessageData.Messages = append(AllMessageData.Messages, Message{
+			Role:    responseData.Choices[0].Message.Role,
+			Content: responseData.Choices[0].Message.Content,
+		})
+		AllMessageData.Unlock()
+	} else {
+		e := ErrorDetail{}
+		if err := json.Unmarshal(body, &e); err != nil {
+			panic(err)
+		}
+
+		if e.Error.Type == "engine_overloaded_error" {
+			time.Sleep(2 * time.Second)
+
+			return "", time.Duration(0), true
+		}
+
+		return "", time.Duration(0), false
+	}
 
 	duration := time.Since(startTime)
 
-	return responseData.Choices[0].Message.Content, duration
+	return responseData.Choices[0].Message.Content, duration, false
 }

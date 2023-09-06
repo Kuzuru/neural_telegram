@@ -112,7 +112,20 @@ func GenerateAndSendMessage(bot *tgbotapi.BotAPI, messageText string, chatID int
 	}()
 
 	// Generate
-	message, _ := GenerateNeuralMessage(messageText)
+	maxRetries := 5
+	var message string
+	var isRetry = false
+
+	for retries := 0; retries < maxRetries; retries++ {
+		message, _, isRetry = GenerateNeuralMessage(messageText)
+
+		if !isRetry {
+			break
+		}
+
+		time.Sleep(time.Second * time.Duration(10-2*retries))
+	}
+
 	cancel()
 
 	// Grooming
